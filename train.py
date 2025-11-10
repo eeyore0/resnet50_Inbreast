@@ -15,7 +15,6 @@ from torchvision import transforms, models
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-
 # ============================================================================
 # 1. 数据集类定义
 # ============================================================================
@@ -27,7 +26,6 @@ class INbreastDataset(Dataset):
     - 应用数据转换(增强/归一化)
     - 将单通道灰度图转换为三通道输入
     """
-
     def __init__(self, image_paths, labels, transform=None):
         """
         参数:
@@ -94,11 +92,11 @@ def get_transforms(is_training=True):
         # 训练集: 包含数据增强
         return transforms.Compose([
             transforms.Lambda(pad_to_square),  # 先填充为正方形
-            transforms.Resize((224, 224)),  # 缩放到 ResNet 输入尺寸
-            transforms.RandomHorizontalFlip(),  # 随机水平翻转
-            transforms.RandomRotation(10),  # 随机旋转 ±10 度
-            transforms.ToTensor(),  # 转为张量
-            transforms.Normalize(  # 标准化(使用 ImageNet 统计值)
+            transforms.Resize((224, 224)),     # 缩放到 ResNet 输入尺寸
+            transforms.RandomHorizontalFlip(), # 随机水平翻转
+            transforms.RandomRotation(10),     # 随机旋转 ±10 度
+            transforms.ToTensor(),             # 转为张量
+            transforms.Normalize(              # 标准化(使用 ImageNet 统计值)
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]
             )
@@ -272,20 +270,20 @@ def plot_metrics(history, save_path='training_metrics.png'):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
     # 损失曲线
-    ax1.plot(epochs, history['train_loss'], 'b-o', label='tr_loss')
-    ax1.plot(epochs, history['val_loss'], 'r-s', label='val_loss')
+    ax1.plot(epochs, history['train_loss'], 'b-o', label='训练损失')
+    ax1.plot(epochs, history['val_loss'], 'r-s', label='验证损失')
     ax1.set_xlabel('Epoch', fontsize=12)
-    ax1.set_ylabel('loss', fontsize=12)
-    ax1.set_title('Loss curve', fontsize=14, fontweight='bold')
+    ax1.set_ylabel('损失值', fontsize=12)
+    ax1.set_title('损失曲线', fontsize=14, fontweight='bold')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
 
     # 准确率曲线
-    ax2.plot(epochs, history['train_acc'], 'b-o', label='tr_acc')
-    ax2.plot(epochs, history['val_acc'], 'r-s', label='val_acc')
+    ax2.plot(epochs, history['train_acc'], 'b-o', label='训练准确率')
+    ax2.plot(epochs, history['val_acc'], 'r-s', label='验证准确率')
     ax2.set_xlabel('Epoch', fontsize=12)
-    ax2.set_ylabel('acc', fontsize=12)
-    ax2.set_title('Acc curve', fontsize=14, fontweight='bold')
+    ax2.set_ylabel('准确率', fontsize=12)
+    ax2.set_title('准确率曲线', fontsize=14, fontweight='bold')
     ax2.legend()
     ax2.grid(True, alpha=0.3)
 
@@ -305,8 +303,9 @@ def main():
     DATA_ROOT = 'iocbd_b_m_data'  # 数据根目录(请根据实际路径修改)
     BATCH_SIZE = 32
     NUM_EPOCHS = 50
-    LEARNING_RATE = 0.001
+    LEARNING_RATE = 0.0001
     TRAIN_RATIO = 0.8
+    PATIENCE = 10  # 早停耐心值: 验证准确率连续10个epoch不提升则停止训练
 
     # 检测设备(GPU 优先)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -366,10 +365,11 @@ def main():
     }
 
     best_val_acc = 0.0  # 记录历史最佳验证准确率
+    patience_counter = 0  # 早停计数器: 记录验证准确率连续未提升的epoch数
 
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("开始训练".center(60))
-    print("=" * 60 + "\n")
+    print("="*60 + "\n")
 
     for epoch in range(NUM_EPOCHS):
         # 训练阶段
@@ -392,28 +392,40 @@ def main():
         history['lr'].append(current_lr)
 
         # 打印 epoch 日志
-        print(f"Epoch [{epoch + 1}/{NUM_EPOCHS}] | "
+        print(f"Epoch [{epoch+1}/{NUM_EPOCHS}] | "
               f"训练损失: {train_loss:.4f} | 训练准确率: {train_acc:.4f} | "
               f"验证损失: {val_loss:.4f} | 验证准确率: {val_acc:.4f} | "
               f"学习率: {current_lr:.6f}")
 
-        # 保存最佳模型(基于验证准确率)
+        # 保存最佳模型(基于验证准确率) 并更新早停计数器
         if val_acc > best_val_acc:
             best_val_acc = val_acc
+            patience_counter = 0  # 重置早停计数器
             torch.save(model.state_dict(), 'best_model.pth')
             print(f"  >> 最佳模型已更新! (验证准确率: {val_acc:.4f})")
+        else:
+            patience_counter += 1  # 验证准确率未提升,计数器加1
+            print(f"  >> 验证准确率未提升 (耐心计数: {patience_counter}/{PATIENCE})")
+
+        # 早停检查
+        if patience_counter >= PATIENCE:
+            print(f"\n{'='*60}")
+            print(f"训练已早停,因为验证准确率连续 {PATIENCE} 个 epoch 未提升".center(60))
+            print(f"{'='*60}\n")
+            break
 
     # ------------------------------------------------------------------------
     # 训练结束 - 生成报告
     # ------------------------------------------------------------------------
-    print("\n" + "=" * 60)
+    print("\n" + "="*60)
     print("训练完成".center(60))
-    print("=" * 60)
+    print("="*60)
+    print(f"实际训练轮数: {len(history['train_loss'])} / {NUM_EPOCHS}")
     print(f"最佳验证准确率: {best_val_acc:.4f}")
     print(f"最佳模型已保存至: best_model.pth")
 
     # 绘制训练曲线
-    plot_metrics(history, save_path='output/training_metrics.png')
+    plot_metrics(history, save_path='training_metrics.png')
 
 
 # ============================================================================
