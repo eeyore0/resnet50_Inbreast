@@ -89,14 +89,43 @@ def get_transforms(is_training=True):
         is_training: 是否为训练集(训练集需要数据增强)
     """
     if is_training:
-        # 训练集: 包含数据增强
+        # 训练集: 包含强数据增强
         return transforms.Compose([
             transforms.Lambda(pad_to_square),  # 先填充为正方形
             transforms.Resize((224, 224)),     # 缩放到 ResNet 输入尺寸
-            transforms.RandomHorizontalFlip(), # 随机水平翻转
-            transforms.RandomRotation(10),     # 随机旋转 ±10 度
-            transforms.ToTensor(),             # 转为张量
-            transforms.Normalize(              # 标准化(使用 ImageNet 统计值)
+
+            # 几何变换
+            transforms.RandomHorizontalFlip(p=0.5),  # 随机水平翻转
+            transforms.RandomVerticalFlip(p=0.3),    # 随机垂直翻转
+            transforms.RandomRotation(15),           # 随机旋转 ±15 度
+
+            # 随机仿射变换 (轻微平移、缩放、错切)
+            transforms.RandomAffine(
+                degrees=0,           # 不额外旋转(已有RandomRotation)
+                translate=(0.1, 0.1),  # 最多平移 10%
+                scale=(0.9, 1.1),      # 缩放范围 90%-110%
+                shear=10             # 错切角度 ±10 度
+            ),
+
+            # 颜色变换
+            transforms.ColorJitter(
+                brightness=0.2,  # 亮度变化 ±20%
+                contrast=0.2,    # 对比度变化 ±20%
+                saturation=0.2   # 饱和度变化 ±20%
+            ),
+
+            transforms.ToTensor(),  # 转为张量
+
+            # 随机擦除 (模拟遮挡, 强正则化手段)
+            transforms.RandomErasing(
+                p=0.5,              # 50% 概率应用
+                scale=(0.02, 0.15), # 擦除区域占比 2%-15%
+                ratio=(0.3, 3.3),   # 擦除区域长宽比
+                value='random'      # 填充随机值
+            ),
+
+            # 标准化(使用 ImageNet 统计值)
+            transforms.Normalize(
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]
             )
@@ -166,13 +195,19 @@ def load_dataset(data_root, train_ratio=0.8):
 # ============================================================================
 # 4. 模型构建函数
 # ============================================================================
-def build_model(num_classes=2, pretrained=True):
+def build_model(num_classes=2, pretrained=True, dropout_rate=0.5):
     """
     构建 ResNet-50 模型
 
     关键修改:
     1. 加载 ImageNet 预训练权重
     2. 替换最后的全连接层,输出节点改为 2(二分类)
+    3. 在全连接层前添加 Dropout 防止过拟合
+
+    参数:
+        num_classes: 输出类别数
+        pretrained: 是否使用预训练权重
+        dropout_rate: Dropout 比例 (默认 0.5)
     """
     # 加载预训练的 ResNet-50
     model = models.resnet50(pretrained=pretrained)
@@ -180,10 +215,13 @@ def build_model(num_classes=2, pretrained=True):
     # 获取原始全连接层的输入特征数
     num_features = model.fc.in_features
 
-    # 替换全连接层: 1000 类 -> 2 类
-    model.fc = nn.Linear(num_features, num_classes)
+    # 替换全连接层: 添加 Dropout + 新的分类层
+    model.fc = nn.Sequential(
+        nn.Dropout(p=dropout_rate),  # Dropout 层,随机丢弃 50% 的神经元
+        nn.Linear(num_features, num_classes)  # 全连接层: 2048 -> 2
+    )
 
-    print(f"模型构建完成: ResNet-50 (预训练={pretrained}, 输出类别={num_classes})")
+    print(f"模型构建完成: ResNet-50 (预训练={pretrained}, 输出类别={num_classes}, Dropout={dropout_rate})")
     return model
 
 
@@ -383,7 +421,7 @@ def main():
     # ------------------------------------------------------------------------
     # 构建模型
     # ------------------------------------------------------------------------
-    model = build_model(num_classes=2, pretrained=True)
+    model = build_model(num_classes=2, pretrained=True, dropout_rate=0.5)
     model = model.to(device)
 
     # 计算类别权重(处理样本不平衡)
