@@ -96,33 +96,33 @@ def get_transforms(is_training=True):
 
             # 几何变换
             transforms.RandomHorizontalFlip(p=0.5),  # 随机水平翻转
-            transforms.RandomVerticalFlip(p=0.3),    # 随机垂直翻转
+            # transforms.RandomVerticalFlip(p=0.3),    # 随机垂直翻转
             transforms.RandomRotation(15),           # 随机旋转 ±15 度
 
-            # 随机仿射变换 (轻微平移、缩放、错切)
-            transforms.RandomAffine(
-                degrees=0,           # 不额外旋转(已有RandomRotation)
-                translate=(0.1, 0.1),  # 最多平移 10%
-                scale=(0.9, 1.1),      # 缩放范围 90%-110%
-                shear=10             # 错切角度 ±10 度
-            ),
+            # # 随机仿射变换 (轻微平移、缩放、错切)
+            # transforms.RandomAffine(
+            #     degrees=0,           # 不额外旋转(已有RandomRotation)
+            #     translate=(0.1, 0.1),  # 最多平移 10%
+            #     scale=(0.9, 1.1),      # 缩放范围 90%-110%
+            #     shear=10             # 错切角度 ±10 度
+            # ),
 
-            # 颜色变换
-            transforms.ColorJitter(
-                brightness=0.2,  # 亮度变化 ±20%
-                contrast=0.2,    # 对比度变化 ±20%
-                saturation=0.2   # 饱和度变化 ±20%
-            ),
+            # # 颜色变换
+            # transforms.ColorJitter(
+            #     brightness=0.2,  # 亮度变化 ±20%
+            #     contrast=0.2,    # 对比度变化 ±20%
+            #     saturation=0.2   # 饱和度变化 ±20%
+            # ),
 
             transforms.ToTensor(),  # 转为张量
 
             # 随机擦除 (模拟遮挡, 强正则化手段)
-            transforms.RandomErasing(
-                p=0.5,              # 50% 概率应用
-                scale=(0.02, 0.15), # 擦除区域占比 2%-15%
-                ratio=(0.3, 3.3),   # 擦除区域长宽比
-                value='random'      # 填充随机值
-            ),
+            # transforms.RandomErasing(
+            #     p=0.5,              # 50% 概率应用
+            #     scale=(0.02, 0.15), # 擦除区域占比 2%-15%
+            #     ratio=(0.3, 3.3),   # 擦除区域长宽比
+            #     value='random'      # 填充随机值
+            # ),
 
             # 标准化(使用 ImageNet 统计值)
             transforms.Normalize(
