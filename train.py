@@ -269,21 +269,21 @@ def plot_metrics(history, save_path='training_metrics.png'):
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
 
-    # 损失曲线
-    ax1.plot(epochs, history['train_loss'], 'b-o', label='训练损失')
-    ax1.plot(epochs, history['val_loss'], 'r-s', label='验证损失')
+    # 损失曲线 (Loss Curve)
+    ax1.plot(epochs, history['train_loss'], 'b-o', label='Train Loss')
+    ax1.plot(epochs, history['val_loss'], 'r-s', label='Validation Loss')
     ax1.set_xlabel('Epoch', fontsize=12)
-    ax1.set_ylabel('损失值', fontsize=12)
-    ax1.set_title('损失曲线', fontsize=14, fontweight='bold')
+    ax1.set_ylabel('Loss', fontsize=12)
+    ax1.set_title('Training and Validation Loss', fontsize=14, fontweight='bold')
     ax1.legend()
     ax1.grid(True, alpha=0.3)
 
-    # 准确率曲线
-    ax2.plot(epochs, history['train_acc'], 'b-o', label='训练准确率')
-    ax2.plot(epochs, history['val_acc'], 'r-s', label='验证准确率')
+    # 准确率曲线 (Accuracy Curve)
+    ax2.plot(epochs, history['train_acc'], 'b-o', label='Train Accuracy')
+    ax2.plot(epochs, history['val_acc'], 'r-s', label='Validation Accuracy')
     ax2.set_xlabel('Epoch', fontsize=12)
-    ax2.set_ylabel('准确率', fontsize=12)
-    ax2.set_title('准确率曲线', fontsize=14, fontweight='bold')
+    ax2.set_ylabel('Accuracy', fontsize=12)
+    ax2.set_title('Training and Validation Accuracy', fontsize=14, fontweight='bold')
     ax2.legend()
     ax2.grid(True, alpha=0.3)
 
@@ -349,11 +349,17 @@ def main():
     # 定义损失函数(交叉熵损失 - 分类任务标准损失)
     criterion = nn.CrossEntropyLoss()
 
-    # 定义优化器(Adam - 主流且鲁棒的优化算法)
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    # 定义优化器(Adam - 主流且鲁棒的优化算法, 添加 L2 正则化防止过拟合)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
-    # 定义学习率调度器(每 7 个 epoch 学习率衰减为原来的 0.1 倍)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=7, gamma=0.1)
+    # 定义学习率调度器(ReduceLROnPlateau - 当验证损失不再下降时自动降低学习率)
+    # mode='min': 监控指标越小越好(损失函数)
+    # factor=0.1: 学习率衰减为原来的 0.1 倍
+    # patience=5: 验证损失连续 5 个 epoch 不下降时触发
+    # verbose=True: 打印学习率变化信息
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.1, patience=5, verbose=True
+    )
 
     # ------------------------------------------------------------------------
     # 训练循环
@@ -380,9 +386,9 @@ def main():
         # 验证阶段
         val_loss, val_acc = validate(model, val_loader, criterion, device)
 
-        # 更新学习率
+        # 更新学习率(基于验证损失 - ReduceLROnPlateau 会自动判断是否需要降低学习率)
+        scheduler.step(val_loss)
         current_lr = optimizer.param_groups[0]['lr']
-        scheduler.step()
 
         # 记录指标
         history['train_loss'].append(train_loss)
