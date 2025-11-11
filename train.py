@@ -259,7 +259,47 @@ def validate(model, dataloader, criterion, device):
 
 
 # ============================================================================
-# 7. 绘图函数
+# 7. 类别权重计算函数
+# ============================================================================
+def calculate_class_weights(labels, device):
+    """
+    计算类别权重以处理样本不平衡问题
+
+    参数:
+        labels: 标签列表
+        device: 计算设备
+
+    返回:
+        class_weights: 类别权重张量
+
+    计算方法:
+        权重 = 总样本数 / (类别数 × 该类别样本数)
+        这样少数类会获得更高的权重,平衡损失函数
+    """
+    from collections import Counter
+
+    label_counts = Counter(labels)
+    total_samples = len(labels)
+    num_classes = len(label_counts)
+
+    # 计算每个类别的权重
+    class_weights = []
+    for i in range(num_classes):
+        weight = total_samples / (num_classes * label_counts[i])
+        class_weights.append(weight)
+
+    class_weights = torch.FloatTensor(class_weights).to(device)
+
+    print(f"\n类别分布:")
+    print(f"  良性 (0): {label_counts[0]} 样本, 权重: {class_weights[0]:.4f}")
+    print(f"  恶性 (1): {label_counts[1]} 样本, 权重: {class_weights[1]:.4f}")
+    print(f"  权重比: {class_weights[1]/class_weights[0]:.2f}:1 (恶性:良性)\n")
+
+    return class_weights
+
+
+# ============================================================================
+# 8. 绘图函数
 # ============================================================================
 def plot_metrics(history, save_path='training_metrics.png'):
     """
@@ -294,7 +334,7 @@ def plot_metrics(history, save_path='training_metrics.png'):
 
 
 # ============================================================================
-# 8. 主训练流程
+# 9. 主训练流程
 # ============================================================================
 def main():
     # ------------------------------------------------------------------------
@@ -346,8 +386,11 @@ def main():
     model = build_model(num_classes=2, pretrained=True)
     model = model.to(device)
 
-    # 定义损失函数(交叉熵损失 - 分类任务标准损失)
-    criterion = nn.CrossEntropyLoss()
+    # 计算类别权重(处理样本不平衡)
+    class_weights = calculate_class_weights(train_labels, device)
+
+    # 定义损失函数(加权交叉熵损失 - 自动平衡类别不平衡问题)
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     # 定义优化器(Adam - 主流且鲁棒的优化算法, 添加 L2 正则化防止过拟合)
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
